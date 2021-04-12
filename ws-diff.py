@@ -70,8 +70,8 @@ def pall(wines, title):
 
 def main():
     
-    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210310.txt'
-    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210314.txt'
+    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210407.txt'
+    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210412.txt'
     
     fullscan = False
     

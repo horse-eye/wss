@@ -1,4 +1,3 @@
-import time
 from datetime import datetime
 
 from bs4 import BeautifulSoup
@@ -27,94 +26,99 @@ driver = webdriver.PhantomJS(phantomPath)
 #bs = BeautifulSoup(html, 'html5lib')
 #bs = BeautifulSoup(html, 'lxml')
 
-# Write to file
-csvfile = datetime.now().strftime("%Y%m%d.txt")
-print("Downloading inventory to ", csvfile)
+@timed
+def download_inventory():
 
-with open(csvfile, 'w') as f:
+    # Write to file
+    csvfile = datetime.now().strftime("%Y%m%d.txt")
+    print("Downloading inventory to ", csvfile)
 
-    print(','.join(headers), file=f)
+    with open(csvfile, 'w') as f:
 
-    # Iterate over each product type
-    for product in products:
+        print(','.join(headers), file=f)
 
-        print("Running for ", product)
-        
-        # Get the first page
-        url = urlmask.format(PNUM="0",PRODUCT=product)  
-        driver.get(url) 
-        
-        #time.sleep(2) # todo: replace with Wait, p.168 Web scraping with python
-        aisHits = WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CLASS_NAME, 'ais-hits')))
+        # Iterate over each product type
+        for product in products:
 
-        pageSource = driver.page_source
-        bs = BeautifulSoup(pageSource, bsParser)
-
-        # Figure out how many pages we have
-        # span.id=stats-productCount > div class=ais-body ais-stats--body > span class=facet-count .text = (number of items)
-        pages = bs.find('span', {'id':'stats-productCount'}).find('span',{'class','facet-count'}).getText().strip("()")
-        pageCount = int(pages) // 15
-        if int(pages) % 15 > 0:
-            pageCount = pageCount + 1
-
-        # Iterate over the pages
-        for p in range(0, pageCount):
-
-            print("Getting page ", p)
-
-            # Each search result is enclosed in <article> tag
-            itemList = bs.findAll('article', {'class':'hit'})
-
-            for item in itemList:
-                
-                if item.find('div', {'class':'out-stock'}):
-                    continue
-
-                pid = item.get("data-pid")
-                pname = item.find('div', {'class':'product-name'})
-                #pdesc = item.find('p', {'class':'product-description'}).getText()
-                
-                priceTag = item.find('div', {'class':'product-price-pnl'}) 
-                px = priceTag.find('div', {'class':'product-price-price'}).getText().partition(" a ") 
-                pxAmt = px[0].strip()
-                pxUnit = px[2].strip() if "save" not in px[2].lower() else px[2].lower().partition("save")[0]
-
-                bulkPxTag = priceTag.find('div', {'class':'product-price-bulkprice'})
+            print("Running for ", product)
             
-                if bulkPxTag is not None:
-                    bulkPx = bulkPxTag.getText().partition(" a ")
-                    bulkPxAmt = bulkPx[0].strip()
-                    bulkPxUnit = bulkPx[2].strip() if "Save " not in bulkPx[2] else bulkPx[2].partition("Save")[0]
-
-                style = alc = ""
-
-                atts = item.find('div', {'class':'product-attributes'}).ul.children 
-                for att in atts:
-                    if "Style" in att.getText():
-                        style = att.span.getText()
-                    if "Alcohol" in att.getText():
-                        alc = att.span.getText()
-                
-                cleanName = pname.a.getText().replace('"', '')
-
-                print(pid, f'"{cleanName}"' , style, alc, 
-                    pxAmt, pxUnit, 
-                    bulkPxAmt if bulkPxTag is not None else '', 
-                    bulkPxUnit if bulkPxTag is not None else '',
-                    pname.a.get("href"), 
-                    sep = ',',
-                    file=f)
-
-            # Fetch the next page
-            url = urlmask.format(PNUM=p,PRODUCT=product)  
+            # Get the first page
+            url = urlmask.format(PNUM="0",PRODUCT=product)  
             driver.get(url) 
-            aisHits = WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CSS_SELECTOR, 'div.ais-hits')))
+            
+            #time.sleep(2) # todo: replace with Wait, p.168 Web scraping with python
+            aisHits = WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CLASS_NAME, 'ais-hits')))
 
             pageSource = driver.page_source
-            bs = BeautifulSoup(pageSource, bsParser)    
+            bs = BeautifulSoup(pageSource, bsParser)
 
-print("done")
+            # Figure out how many pages we have
+            # span.id=stats-productCount > div class=ais-body ais-stats--body > span class=facet-count .text = (number of items)
+            pages = bs.find('span', {'id':'stats-productCount'}).find('span',{'class','facet-count'}).getText().strip("()")
+            pageCount = int(pages) // 15
+            if int(pages) % 15 > 0:
+                pageCount = pageCount + 1
 
-driver.close()
+            # Iterate over the pages
+            for p in range(1, pageCount+1):
+
+                print(f"Getting page {p+1} of {pageCount+1}")
+
+                # Each search result is enclosed in <article> tag
+                itemList = bs.findAll('article', {'class':'hit'})
+
+                for item in itemList:
+                    
+                    if item.find('div', {'class':'out-stock'}):
+                        continue
+
+                    pid = item.get("data-pid")
+                    pname = item.find('div', {'class':'product-name'})
+                    #pdesc = item.find('p', {'class':'product-description'}).getText()
+                    
+                    priceTag = item.find('div', {'class':'product-price-pnl'}) 
+                    px = priceTag.find('div', {'class':'product-price-price'}).getText().partition(" a ") 
+                    pxAmt = px[0].strip()
+                    pxUnit = px[2].strip() if "save" not in px[2].lower() else px[2].lower().partition("save")[0]
+
+                    bulkPxTag = priceTag.find('div', {'class':'product-price-bulkprice'})
+                
+                    if bulkPxTag is not None:
+                        bulkPx = bulkPxTag.getText().partition(" a ")
+                        bulkPxAmt = bulkPx[0].strip()
+                        bulkPxUnit = bulkPx[2].strip() if "Save " not in bulkPx[2] else bulkPx[2].partition("Save")[0]
+
+                    style = alc = ""
+
+                    atts = item.find('div', {'class':'product-attributes'}).ul.children 
+                    for att in atts:
+                        if "Style" in att.getText():
+                            style = att.span.getText()
+                        if "Alcohol" in att.getText():
+                            alc = att.span.getText()
+                    
+                    cleanName = pname.a.getText().replace('"', '')
+
+                    print(pid, f'"{cleanName}"' , style, alc, 
+                        pxAmt, pxUnit, 
+                        bulkPxAmt if bulkPxTag is not None else '', 
+                        bulkPxUnit if bulkPxTag is not None else '',
+                        pname.a.get("href"), 
+                        sep = ',',
+                        file=f)
+
+                # Fetch the next page
+                url = urlmask.format(PNUM=p,PRODUCT=product)  
+                driver.get(url) 
+                aisHits = WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CSS_SELECTOR, 'div.ais-hits')))
+
+                pageSource = driver.page_source
+                bs = BeautifulSoup(pageSource, bsParser)    
+
+    print("done")
+
+    driver.close()
 
 #
+
+download_inventory()
