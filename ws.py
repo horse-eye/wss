@@ -1,4 +1,5 @@
 from datetime import datetime
+from util import timed
 
 from bs4 import BeautifulSoup
 from selenium import webdriver 

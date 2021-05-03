@@ -26,11 +26,12 @@ def specials(wines):
 
     header("SPECIALS")
     units = ['magnum','imperial','jeroboam']
-    names = ['fontodi','trevallon','isole','mendel','muga','vajra','batailley','gruaud','larose','vivens','wassmer',
-                'zapata','cakebread','soula',
-                'beaucastel','poyferre','guadet','pontet','osborne','lacoste','troplong','loosen','talbot',  #big names
-                'madeira','ximenez','contino','sondraia',
-                'canneto','contucci',
+    names = ['trevallon','mendel','batailley','gruaud','larose','vivens','wassmer',
+                'zapata','cakebread','soula','trévallon',
+                'beaucastel','poyferre','guadet','pontet','lacoste','troplong','mondot','loosen','talbot',  
+                'muga','contino',
+                'sondraia','canneto','contucci','sassicaia','guido','ornellaia','brunelli','fontodi','isole','vajra',
+                'madeira','ximenez','osborne',
                 'jeroboam','magnum','imperial'
                 ]
     
@@ -70,8 +71,8 @@ def pall(wines, title):
 
 def main():
     
-    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210407.txt'
-    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210412.txt'
+    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210412.txt'
+    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210424.txt'
     
     fullscan = False
     
