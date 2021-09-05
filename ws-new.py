@@ -7,13 +7,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# Title change
-# Country, region?
-# bulk discount vs single px (or capture Save) + mispricing
-# +Descrption and more attributes from product page, detection on specific things
+# TODO
+# Style (red/white etc - missing. get from individual page? or process per product?)
+# Report discount/misprice at end of scrape? old vs new px in html
+# Any additional attributes from product page?
 # Twitter bot publishing what's new or whatever
-# Ignore mixed cases. Do I ever care? Maybe just filter them from diff?
-# ws-stats: avg/median px per category, num wines per cat + quintile etc
+# ws-analytics: avg/median px per category, num wines per cat + quintile, px trends over time
 
 # Constants
 bsParser = 'html.parser'
@@ -35,7 +34,7 @@ productsPerPage = 60
 def download_inventory():
 
     # Write to file
-    csvfile = datetime.now().strftime("%Y%m%d.txt")
+    csvfile = datetime.now().strftime("%Y%m%d.csv")
     print("Downloading inventory to ", csvfile)
 
     with open(csvfile, 'w') as f:
@@ -64,24 +63,19 @@ def download_inventory():
                 pageCount = pageCount + 1
 
             #print(hits, pageCount)
-            root = bs.find('div', {'class','product-listing--isList'})
 
             # Iterate over the pages
-            for p in range(1, pageCount):
+            for p in range(1, pageCount+1):
 
                 print(f"Parsing page {p} of {pageCount}")
 
                 # Each search result is enclosed in div.product-tile__container
+                root = bs.find('div', {'class','product-listing--isList'})
                 itemList = root.findAll('div', {'class':'product-tile__container'})
-                
-                print( len(itemList))
-                #quit()
 
                 for item in itemList:
-                    
-                    # todo: revisit
-                    #if item.find('div', {'class':'out-stock'}):
-                    #    continue
+
+                    pf(item, f'debug\{pid}.html')
 
                     #
                     pdescTag = item.find('div',{'class':'product-tile__description'})
@@ -89,53 +83,66 @@ def download_inventory():
                     pidTag = pdescTag.find('div', {'class':'product-tile__price', 'class':'bottomLine'})  
                     pid = pidTag.div.get("data-yotpo-product-id")
 
-                    porigin = pdescTag.find('span', {'class':'product-tile__origin'}).getText().strip()
+                    poriginTag = pdescTag.find('span', {'class':'product-tile__origin'})
+                    porigin = poriginTag.getText().strip() if poriginTag is not None else ''
 
                     purlTag = pdescTag.find('a', {'class':'product-tile__link'})
                     purl = purlTag.get("href")
                     pname = purlTag.h2.getText().strip()
                     
-                    priceTags = item.findAll('div', {'class':'product-tile__price','class':'product-tile__price--per-bottle'}) 
-                    px = priceTag.find('div', {'class':'product-price-price'}).getText().partition(" a ") 
-                    pxAmt = px[0].strip()
-                    pxUnit = px[2].strip() if "save" not in px[2].lower() else px[2].lower().partition("save")[0]
+                    priceTags = item.findAll('div', {'class':'product-tile__price--per-bottle'}) 
 
-                    bulkPxTag = priceTag.find('div', {'class':'product-price-bulkprice'})
-                
-                    if bulkPxTag is not None:
-                        bulkPx = bulkPxTag.getText().partition(" a ")
-                        bulkPxAmt = bulkPx[0].strip()
-                        bulkPxUnit = bulkPx[2].strip() if "Save " not in bulkPx[2] else bulkPx[2].partition("Save")[0]
+                    # Out of stock , tood: make more explicit?
+                    if len(priceTags) == 0:
+                        continue
 
-                    print(purl, pname, pid, porigin)
-                    quit()
+                    # TODO: fix old vs new px/bulk px
+
+                    btlTag = priceTags[0]
+                    btlPx = btlTag.span.span.next_sibling.replace(',','').strip('£')
+                    btlUnit = btlTag.span.next_sibling.strip()
+
+                    bulkUnit = bulkPx = ''
+                    if(len(priceTags) > 1):
+                        bulkTag = priceTags[1]
+                        bulkPx = bulkTag.span.span.next_sibling.replace(',','').strip('£')
+                        bulkUnit = bulkTag.span.next_sibling.strip()   
+
+                        if bulkUnit is None or bulkUnit == '':
+                            pf(item, f'debug\bulkUnit-{pid}.html')
+
+                    if(len(priceTags) > 2):
+                        pf(item, f'debug\px-{pid}.html')
+                        print("WARNING - expected <= 2 prices, found ", len(priceTags) )
 
                     style = alc = ""
-
+                    '''
                     atts = item.find('div', {'class':'product-attributes'}).ul.children 
                     for att in atts:
                         if "Style" in att.getText():
                             style = att.span.getText()
                         if "Alcohol" in att.getText():
                             alc = att.span.getText()
-                    
-                    cleanName = pname.a.getText().replace('"', '')
+                    '''
+
+                    cleanName = pname.replace('"', '')
 
                     print(pid, f'"{cleanName}"' , style, alc, 
-                        pxAmt, pxUnit, 
-                        bulkPxAmt if bulkPxTag is not None else '', 
-                        bulkPxUnit if bulkPxTag is not None else '',
-                        purl, 
+                        btlPx, btlUnit, 
+                        bulkPx, 
+                        bulkUnit,
+                        purl,
+                        porigin, 
                         sep = ',',
                         file=f)
 
                 # Fetch the next page
-                url = urlmask.format(PNUM=p,PRODUCT=product)  
-                driver.get(url) 
-                aisHits = WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CSS_SELECTOR, 'div.ais-hits')))
-
-                pageSource = driver.page_source
-                bs = BeautifulSoup(pageSource, bsParser)    
+                if p < pageCount:
+                    url = urlmask.format(PNUM=p+1,PRODUCT=product)  
+                    driver.get(url) 
+                    WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CLASS_NAME, 'product-listing--isList')))
+                    pageSource = driver.page_source
+                    bs = BeautifulSoup(pageSource, bsParser)    
 
     print("done")
 
