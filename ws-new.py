@@ -1,5 +1,5 @@
 from datetime import datetime
-from util import timed
+from util import timed, pf
 
 from bs4 import BeautifulSoup
 from selenium import webdriver 
@@ -18,15 +18,18 @@ from selenium.webdriver.support import expected_conditions as EC
 # Constants
 bsParser = 'html.parser'
 domain = ''.join(reversed(["iety","soc","e","win","the"]))
-headers = ["Code", "Name","Type","Alcohol","Px","Px Unit","Bulk Px","Bulk Unit","URL"]
-products = ["Red%20Wine","White%20Wine","Champagne","Sparkling%20Wine","Sherry","Rose%20Wine","Port","Whisky","Brandy","Madeira","Other%20Spirits","Other%20Fortified","Aperitifs","Liqueurs","Mixed%20Cases"]
-urlmask = 'https://www.'+domain+'.com/searchProducts.aspx?q=&hPP=15&idx=products&p={PNUM}&dFR%5Btype%5D%5B0%5D={PRODUCT}&is_v=1'
+headers = ["Code", "Name","Type","Alcohol","Px","Px Unit","Bulk Px","Bulk Unit","URL","Origin"]
+#products = ["Red%20Wine","White%20Wine","Champagne","Sparkling%20Wine","Sherry","Rose%20Wine","Port","Whisky","Brandy","Madeira","Other%20Spirits","Other%20Fortified","Aperitifs","Liqueurs","Mixed%20Cases"]
+#urlmask = 'https://www.'+domain+'.com/searchProducts.aspx?q=&hPP=15&idx=products&p={PNUM}&dFR%5Btype%5D%5B0%5D={PRODUCT}&is_v=1'
 phantomPath = '../../phantomjs-2.1.1-macosx/bin/phantomjs'  # NOTE: Can/should replace phantomJS with headless Chrome/FF
 driver = webdriver.PhantomJS(phantomPath) 
 
-# Alternate parsers for BS
-#bs = BeautifulSoup(html, 'html5lib')
-#bs = BeautifulSoup(html, 'lxml')
+
+# All except mixed cases, beer, non-drinks
+# https://www.thewinesociety.com/search-results?page=1&producttype=17045,17047,17059,17061,17063,17047,17071,17077,17077,17079,17075,17062,17064,17060,17055,17054
+products = ['17045,17047,17059,17061,17063,17047,17071,17077,17077,17079,17075,17062,17064,17060,17055,17054']
+urlmask = 'https://www.thewinesociety.com/search-results?page={PNUM}&producttype={PRODUCT}'
+productsPerPage = 60
 
 @timed
 def download_inventory():
@@ -45,40 +48,54 @@ def download_inventory():
             print("Running for ", product)
             
             # Get the first page
-            url = urlmask.format(PNUM="0",PRODUCT=product)  
+            url = urlmask.format(PNUM="1",PRODUCT=product)  
             driver.get(url) 
             
-            #time.sleep(2) # todo: replace with Wait, p.168 Web scraping with python
-            aisHits = WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CLASS_NAME, 'ais-hits')))
-
+            # Wait for product listing to load, then parse the page
+            WebDriverWait(driver, 10).until( EC.presence_of_element_located((By.CLASS_NAME, 'product-listing--isList')))
             pageSource = driver.page_source
             bs = BeautifulSoup(pageSource, bsParser)
 
             # Figure out how many pages we have
-            # span.id=stats-productCount > div class=ais-body ais-stats--body > span class=facet-count .text = (number of items)
-            pages = bs.find('span', {'id':'stats-productCount'}).find('span',{'class','facet-count'}).getText().strip("()")
-            pageCount = int(pages) // 15
-            if int(pages) % 15 > 0:
+            # div class=result-count > h2 class=result-count-heading > .text = Showing 1 - 60 of X products
+            hits = bs.find('div',{'class','result-count'}).find('h2', {'class':'result-count-heading'}).getText().replace("Showing 1 - 60 of ","").replace(" products","").strip()
+            pageCount = int(hits) // productsPerPage
+            if int(hits) % productsPerPage > 0:
                 pageCount = pageCount + 1
 
+            #print(hits, pageCount)
+            root = bs.find('div', {'class','product-listing--isList'})
+
             # Iterate over the pages
-            for p in range(1, pageCount+1):
+            for p in range(1, pageCount):
 
-                print(f"Getting page {p+1} of {pageCount+1}")
+                print(f"Parsing page {p} of {pageCount}")
 
-                # Each search result is enclosed in <article> tag
-                itemList = bs.findAll('article', {'class':'hit'})
+                # Each search result is enclosed in div.product-tile__container
+                itemList = root.findAll('div', {'class':'product-tile__container'})
+                
+                print( len(itemList))
+                #quit()
 
                 for item in itemList:
                     
-                    if item.find('div', {'class':'out-stock'}):
-                        continue
+                    # todo: revisit
+                    #if item.find('div', {'class':'out-stock'}):
+                    #    continue
 
-                    pid = item.get("data-pid")
-                    pname = item.find('div', {'class':'product-name'})
-                    #pdesc = item.find('p', {'class':'product-description'}).getText()
+                    #
+                    pdescTag = item.find('div',{'class':'product-tile__description'})
+
+                    pidTag = pdescTag.find('div', {'class':'product-tile__price', 'class':'bottomLine'})  
+                    pid = pidTag.div.get("data-yotpo-product-id")
+
+                    porigin = pdescTag.find('span', {'class':'product-tile__origin'}).getText().strip()
+
+                    purlTag = pdescTag.find('a', {'class':'product-tile__link'})
+                    purl = purlTag.get("href")
+                    pname = purlTag.h2.getText().strip()
                     
-                    priceTag = item.find('div', {'class':'product-price-pnl'}) 
+                    priceTags = item.findAll('div', {'class':'product-tile__price','class':'product-tile__price--per-bottle'}) 
                     px = priceTag.find('div', {'class':'product-price-price'}).getText().partition(" a ") 
                     pxAmt = px[0].strip()
                     pxUnit = px[2].strip() if "save" not in px[2].lower() else px[2].lower().partition("save")[0]
@@ -89,6 +106,9 @@ def download_inventory():
                         bulkPx = bulkPxTag.getText().partition(" a ")
                         bulkPxAmt = bulkPx[0].strip()
                         bulkPxUnit = bulkPx[2].strip() if "Save " not in bulkPx[2] else bulkPx[2].partition("Save")[0]
+
+                    print(purl, pname, pid, porigin)
+                    quit()
 
                     style = alc = ""
 
@@ -105,7 +125,7 @@ def download_inventory():
                         pxAmt, pxUnit, 
                         bulkPxAmt if bulkPxTag is not None else '', 
                         bulkPxUnit if bulkPxTag is not None else '',
-                        pname.a.get("href"), 
+                        purl, 
                         sep = ',',
                         file=f)
 

@@ -10,3 +10,9 @@ def timed(func):
         print(func.__name__ + ": %.5f s" % exec_time)
         return result
     return wrapper  
+
+
+def pf(obj, filename):
+    '''Writes content to the specified file'''
+    with open(filename, 'w') as f:
+        print(obj, file=f)

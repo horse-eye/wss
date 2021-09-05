@@ -25,15 +25,24 @@ def pw(wine):
 def specials(wines):
 
     header("SPECIALS")
-    units = ['magnum','imperial','jeroboam']
     names = ['trevallon','mendel','batailley','gruaud','larose','vivens','wassmer',
                 'zapata','cakebread','soula','trévallon',
                 'beaucastel','poyferre','guadet','pontet','lacoste','troplong','mondot','loosen','talbot',  
-                'muga','contino',
+                'muga','contino','bohórquez','904',
                 'sondraia','canneto','contucci','sassicaia','guido','ornellaia','brunelli','fontodi','isole','vajra',
-                'madeira','ximenez','osborne',
-                'jeroboam','magnum','imperial'
+                'madeira','ximenez','osborne'
                 ]
+    
+    for w in wines:
+        if any(n in w["Name"].lower() for n in names):
+            pw(w)
+
+
+def bigbig(wines):
+
+    header("BIG BIG")
+    units = ['magnum','imperial','jeroboam']
+    names = ['jeroboam','magnum','imperial']
     
     for w in wines:
         if any(n in w["Name"].lower() for n in names) or any(u in w["Px"].lower() for u in units):
@@ -42,7 +51,7 @@ def specials(wines):
 
 def changes(wines):
     header("PRICE CHANGES")
-    mask = "{x} => {y} per {z}"
+    mask = "{x} => {y} per {z}, {a} {b}%"
     
     for w in wines:
         c = w["changes"]
@@ -53,14 +62,23 @@ def changes(wines):
 
         px = None
         if "Px" in c:
-            px = mask.format(x=c["Px"][0], y=c["Px"][1], z=pxUnit)
+            px1 = float(c["Px"][0].replace('£',''))
+            px2 = float(c["Px"][1].strip('£'))
+            pxdelta = ((px2-px1)/px1)*100
+            updown = "down" if pxdelta<=0 else "up"
+            px = mask.format(x=c["Px"][0], y=c["Px"][1], z=pxUnit, a=updown, b = "%.1f" % abs(pxdelta))
 
         bpx = None
         if "Bulk Px" in c:
-            bpx = mask.format(x=c["Bulk Px"][0], y=c["Bulk Px"][1], z=bulkUnit)
+            px1 = float(c["Bulk Px"][0].replace('£','')) if len(c["Bulk Px"][0].strip()) >0 else 0.0
+            px2 = float(c["Bulk Px"][1].strip('£')) if len(c["Bulk Px"][1].strip()) >0 else 0.0
+            pxdelta = ((px2-px1)/px1)*100 if px1 != 0.0 else 0
+            updown = "down" if pxdelta<=0 else "up"
+            bpx = mask.format(x=c["Bulk Px"][0], y=c["Bulk Px"][1], z=bulkUnit, a=updown, b= "%.1f" % abs(pxdelta))
 
+        
         if px is not None or bpx is not None:
-            print(name, px or '', bpx or '', sep=', ')    
+            print(name.replace(',',''), px or '', bpx or '', sep=', ')    
 
 
 def pall(wines, title):
@@ -71,8 +89,8 @@ def pall(wines, title):
 
 def main():
     
-    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210412.txt'
-    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210424.txt'
+    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210811.txt'
+    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210820.txt'
     
     fullscan = False
     
@@ -80,7 +98,11 @@ def main():
 
     delta = diff(f1, f2, 'Code')
 
+    # todo: drive specials, bigbig, mispricing off load_csv(f2)
+
     specials(delta["added"])
+    bigbig(delta["added"])
+
     changes(delta["changed"])
     
     pall(delta["added"],"NEW IN")
