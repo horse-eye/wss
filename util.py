@@ -16,3 +16,9 @@ def pf(obj, filename):
     '''Writes content to the specified file'''
     with open(filename, 'w') as f:
         print(obj, file=f)
+
+def plf(obj, filename):
+    '''Writes a list to the specified file, one item per line'''
+    with open(filename, 'w') as f:
+        for item in obj:
+            print(item, file=f)
