@@ -86,15 +86,10 @@ def pall(wines, title):
     for w in wines:
         pw(w)
 
+def diff_inventory(f1, f2):
 
-def main():
-    
-    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210811.txt'
-    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210820.txt'
-    
-    fullscan = False
-    
-    f1 = 'empty.csv' if fullscan else f1
+    fullscan = False   
+    f1 = 'empty.txt' if fullscan else f1
 
     delta = diff(f1, f2, 'Code')
 
@@ -110,6 +105,12 @@ def main():
 
     #with open('delta.json', 'w') as f:
     #    print(json.dumps(delta, indent = 4, sort_keys=True), file=f )
+
+def main():
+    
+    f1 = sys.argv[1] if len(sys.argv) >= 3 else '20210911.csv'
+    f2 = sys.argv[2] if len(sys.argv) >= 3 else '20210912.csv'  
+    diff_inventory(f1, f2)
 
 
 if __name__ == '__main__':

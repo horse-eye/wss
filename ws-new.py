@@ -1,5 +1,8 @@
+from os import listdir
 from datetime import datetime
+
 from util import timed, pf, plf
+from ws_diff import diff_inventory
 
 from bs4 import BeautifulSoup
 from selenium import webdriver 
@@ -8,21 +11,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # TODO
-# Style (red/white etc - missing. get from individual page? or process per product?)
+# Replace phantomJS with headless Chrome/FF
 # Report discount/misprice at end of scrape? old vs new px in html
-# Any additional attributes from product page?
+# Small number of missing styles - fill in from product page calls?
 # Twitter bot publishing what's new or whatever
 # ws-analytics: avg/median px per category, num wines per cat + quintile, px trends over time
 
 # Constants
+basedir = 'inventory/'
 bsParser = 'html.parser'
 domain = ''.join(reversed(["iety","soc","e","win","the"]))
 headers = ["Code", "Name","Type","Alcohol","Px","Px Unit","Bulk Px","Bulk Unit","URL","Origin"]
-#products = ["Red%20Wine","White%20Wine","Champagne","Sparkling%20Wine","Sherry","Rose%20Wine","Port","Whisky","Brandy","Madeira","Other%20Spirits","Other%20Fortified","Aperitifs","Liqueurs","Mixed%20Cases"]
-#urlmask = 'https://www.'+domain+'.com/searchProducts.aspx?q=&hPP=15&idx=products&p={PNUM}&dFR%5Btype%5D%5B0%5D={PRODUCT}&is_v=1'
 phantomPath = '../../phantomjs-2.1.1-macosx/bin/phantomjs'  # NOTE: Can/should replace phantomJS with headless Chrome/FF
 driver = webdriver.PhantomJS(phantomPath) 
-
 
 # All except mixed cases, beer, non-drinks
 # https://www.thewinesociety.com/search-results?page=1&producttype=17045,17047,17059,17061,17063,17047,17071,17077,17077,17079,17075,17062,17064,17060,17055,17054
@@ -51,7 +52,7 @@ def mapStyle(text):
         return 'Sparkling Wine'   
     if text == 'sweet-wines': 
         return 'Sweet Wine'  
-    if text in ['rose','rose-wine']: 
+    if text == 'rose' or 'rose-wine' in text: 
         return 'Rose Wine'
     if 'sherry' in text: 
         return 'Sherry'
@@ -78,14 +79,17 @@ def getStyle(itemTag):
 
     if mapped is None:    
         _imgtags.append( [imgTag, altTag[1] ] )
+        pidTag = itemTag.find('div',{'class':'product-tile__description'}).find('div', {'class':'product-tile__price', 'class':'bottomLine'})  
+        pid = pidTag.div.get("data-yotpo-product-id")
+        pf(itemTag, f'debug/{pid}.html') # debug
     
     return mapped if mapped is not None else 'Unknown'
 
 @timed
-def download_inventory():
+def download_inventory(dir):
 
     # Write to file
-    csvfile = datetime.now().strftime("%Y%m%d.csv")
+    csvfile = dir + datetime.now().strftime("%Y%m%d.csv")
     print("Downloading inventory to ", csvfile)
 
     with open(csvfile, 'w') as f:
@@ -170,7 +174,7 @@ def download_inventory():
 
                     #debug
                     if(len(priceTags) > 2):
-                        pf(priceTags, f'debug/multipx-{pid}.html')
+                        plf(priceTags, f'debug/multipx-{pid}.html')
                         print("WARNING - expected <= 2 prices, found ", len(priceTags) )
 
                     alc = ""
@@ -201,6 +205,18 @@ def download_inventory():
 
     plf(_imgtags, 'tags.csv')
 
+    return csvfile
+
 #
 
-download_inventory()
+def get_last_inventory(dir):
+    files = sorted([f for f in listdir(dir) if f.endswith('.csv')])
+    latest = dir + max(files)
+    return latest
+
+# TODO: (bug) - rerunning would cause downloaded to be diffed with itself
+
+previous = get_last_inventory(basedir)
+current = download_inventory(basedir)
+
+diff_inventory(previous, current)
